@@ -30,7 +30,7 @@ md"""
 html"""
 <style>
   main {
-    max-width: 900px;
+    max-width: 700px;
   }
 </style>
 """
@@ -199,7 +199,7 @@ begin
 
 	#set layout		
 	l = @layout [a ; b x]
-	plot(p1, p2, p3,layout = l, size=(900,600) )
+	plot(p1, p2, p3,layout = l, size=(700,500) )
 end
 
 
@@ -1796,8 +1796,8 @@ version = "1.4.1+0"
 
 # ╔═╡ Cell order:
 # ╟─e4f354cc-6bc1-45a1-8cf0-ef43846a1f43
-# ╟─8c773d5e-4a2a-11ed-1b62-136ff8e0f3b5
-# ╟─11d51a15-144b-4977-b560-68c175e02278
+# ╠═8c773d5e-4a2a-11ed-1b62-136ff8e0f3b5
+# ╠═11d51a15-144b-4977-b560-68c175e02278
 # ╟─3f407bb6-f314-4360-b276-15c16b4d1fb7
 # ╟─51afe073-84ca-45d6-8cd8-16b2bbc2cd49
 # ╟─c6d0bf1d-da47-4f4e-a726-8e92168d24b2
@@ -1807,6 +1807,6 @@ version = "1.4.1+0"
 # ╟─eec2ee3b-7e5c-46e0-96c6-cde1e42c8a7f
 # ╟─6e3bb77c-2230-44ab-b654-f1ee457e5715
 # ╟─eb3edb95-b77f-4d77-86cf-2bb5c8f9f8ab
-# ╟─f0ff8493-3278-41a5-9642-5ceb2ac4fb2e
+# ╠═f0ff8493-3278-41a5-9642-5ceb2ac4fb2e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
