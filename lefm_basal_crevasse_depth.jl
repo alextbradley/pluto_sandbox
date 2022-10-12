@@ -14,28 +14,37 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ ecb015b0-4487-11ed-24d6-231bc3be840b
+# ╔═╡ 8c773d5e-4a2a-11ed-1b62-136ff8e0f3b5
 # ╠═╡ show_logs = false
 using Plots, DifferentialEquations, PlutoUI
 
-# ╔═╡ f3415bd6-218e-40b3-9d4a-da190e461105
-function get_rxx()
-	return 0.5*1e6
+# ╔═╡ e4f354cc-6bc1-45a1-8cf0-ef43846a1f43
+md""" 
+	How does the LEFM crack thickness depend on basal and surface temperatures, strain rate, and ice thickness?
+
+	Move the sliders below to explore. The plot shows (first panel) the total stress intensity factor (blue) and its constituent parts (other colors), (second panel) a schematic of the crack thickness and (third panel) the ice temperature profile.
+	
+"""
+
+# ╔═╡ 11d51a15-144b-4977-b560-68c175e02278
+html"""
+<style>
+  main {
+    max-width: 900px;
+  }
+</style>
+"""
+
+# ╔═╡ 3f407bb6-f314-4360-b276-15c16b4d1fb7
+begin
+function KIB(db,H,ϵ, Tb, Ts) #ddv: depth-dependent viscosity
+	Tbk = Tb + 273.15;
+	Tsk = Ts + 273.15; #convert to kelvin
+	Rxx = get_rxx_(H, ϵ, Tbk, Tsk);
+	
+	return  2 .* Rxx .* db.^(1/2) .* fb_dvv.(db/H, Tbk,Tsk,H) /sqrt(pi)
 end
 
-# ╔═╡ 86d23615-2fc4-4152-8431-99de10bbcc1d
-function F(ζ)
-	#ζ = ds/H
-	return sqrt(2/pi /ζ *tan(pi/2*ζ))*((0.752 + 2.02*ζ + 0.37*(1-sin(pi/2 * ζ))^3)/cos(pi/2 *ζ))
-end
-
-# ╔═╡ d9bb6c76-bac3-4e36-93a5-f3877991c4d7
-function Kle(ds,H,Rxx)
-	#Rxx = get_rxx();
-	return sqrt(pi) .* Rxx .* ds.^(1/2) .* F.(ds/H)
-end
-
-# ╔═╡ b3a12ef9-c437-4afc-a0d8-c26267fe305d
 function get_G(z,ζ)
 	#in the terminology of Tada et al., z = c/a, ζ = a/b (scalar)
 	ab = ζ;
@@ -48,173 +57,6 @@ function get_G(z,ζ)
 	return g1(ab) .+ g2(ab)*ca .+ g3.(ab).*ca.^2 .+ g4(ab).*(ca).^3 
 end
 
-# ╔═╡ 31883734-2f40-4e1a-a577-6df58c14167b
-function get_f(ζ)
-	#ζ = ds/H = \tilde{d_s}
-	dz = 1e-2; #numerical integration grid spacing
-	zz = dz:dz:(1-dz);
-	G = get_G(zz,ζ)
-	integrand = zz .* G .* (1 - ζ)^(-3/2) .* (1 .- zz.^2).^(-1/2);
-	return sum(integrand)*dz
-end
-
-# ╔═╡ 85725ddd-df10-412b-b0ed-4a0a4eeff9f5
-function KIi(ds,H)
-	ρi = 918.0;
-	g  = 9.81;
-	f  = get_f.(ds/H);
-	return -2*ρi*g*ds.^(3/2).*f/sqrt(pi)
-end
-
-# ╔═╡ 6f435b76-48b9-49c3-aefe-b0418797844c
-function get_g(α,β)
-	#alpha plays role of ds/H, beta plays role of dw/H
-	N = 20; #number of integration grid points
-	zz = LinRange((1-β+1e-6),(1-1e-6),N)
-	dz = diff(zz)[1]
-	integrand = (zz .- (1 .- β)).*get_G.(zz,α).*(1-α)^(-3/2).*(1 .- zz.^2).^(-1/2);
-	return sum(integrand)*dz
-end
-
-
-# ╔═╡ 97b3c4ac-5166-4f15-81c1-1a30b8a718d4
-function KIw(ds,dw,H)
-	ρw = 1028.0;
-	g = 9.81;
-	gg = get_g.(ds/H, dw/H)
-	return 2*ρw*g*ds.^(3/2).*gg / sqrt(pi)
-end
-
-# ╔═╡ 6531970c-022f-44fa-b79e-f94bf97f94cc
-md"""
-That was for surface crevasses. Let's do basal crevasses now...
-"""
-
-# ╔═╡ 0f489a0f-1a0e-4d5f-99d1-6bb858321b21
-function KIe_base(db,H,Rxx);
-#Rxx = get_rxx();
-	return sqrt(pi) .* Rxx .* db.^(1/2) .* F.(db/H)
-end
-
-# ╔═╡ ab569648-7023-4429-8f3a-0936580c07db
-function get_fb(ξ)
-	#ξ = db/H = \tilde{d_b}
-	dz = 1e-2; #numerical integration grid spacing
-	zz = dz:dz:(1-dz);
-	G = get_G(zz,ξ)
-	integrand = (ξ^(-1) .- zz) .* G .* (1 - ξ)^(-3/2) .* (1 .- zz.^2).^(-1/2)
-	return sum(integrand)*dz
-end
-
-# ╔═╡ fc513175-6e7b-48dd-8f2a-4ffd9d7c2455
-function KIi_base(db,H)
-	ρi = 918.0;
-	g  = 9.81;
-	fb  = get_fb.(db/H);
-	return -2*ρi*g*db.^(3/2).*fb/sqrt(pi)
-end
-
-# ╔═╡ e7c071b5-c370-4d58-aaf1-2110522700ab
-function get_gb(ξ)
-	#ξ = db/H = \tilde{d_b}
-	ρi = 918.0;
-	ρw = 1028.0;
-	dz = 1e-2; #numerical integration grid spacing
-	zz = dz:dz:(1-dz);
-	G = get_G.(zz,ξ)
-	integrand = (ξ^(-1) * ρi / ρw .- zz) .* G .* (1 .- ξ)^(-3/2) .* (1 .- zz.^2).^(-1/2);
-	return sum(integrand)*dz
-end
-
-# ╔═╡ f2db7f4c-0c7c-4478-a86b-f4dfb4da9b29
-function KIw_base(db,H)
-	ρw = 1028.0;
-	g = 9.81;
-	gg_b = get_gb.(db/H)
-	return 2*ρw*g*db.^(3/2).*gg_b / sqrt(pi)
-end
-
-# ╔═╡ 8fbc91b9-906b-4d41-8d59-c598530cc776
-md"""
-$(@bind H Slider(20:2:600)) H: """
-
-# ╔═╡ 88e63a85-5bb0-4359-90b5-fb85254b6e9c
-H
-
-# ╔═╡ ba311191-6cc3-4748-84e9-a69d2ccb6a87
-begin
-	Rxx = 1e6;
-	#H = 300; 
-	ds = LinRange(1,H-1,100);
-	dw = 1e-3*ds;
-	Ki = KIi(ds,H) + KIw(ds,dw,H) +  Kle(ds,H,Rxx)
-	
-	plot(ds, Ki,xlim = [0,0.9*H], ylim = [-1,5]*1e7, label = "total", linewidth = 3,framestyle=:box)
-	plot!(ds, KIi(ds,H), label = "ice weight")
-	plot!(ds, KIw(ds,dw,H), label = "water weight")
-	plot!(ds, Kle(ds,H,Rxx), label = "tensile stress")
-end
-
-# ╔═╡ b982f80d-4467-4b1c-bab8-06f0e82a0dc5
-H
-
-# ╔═╡ 346bc233-6974-41e4-87e8-7c7abb98f6f6
-begin
-	Rxx_base = 1*1e5;
-	db = LinRange(1,H-1,100);
-	Ki_base = KIi_base(db,H) + KIw_base(db,H) +  Kle(db,H,Rxx_base)
-	
-	plot(ds, Ki_base,xlim = [0,0.9*H], ylim = [-1,1]*1e7, label = "total", linewidth = 3,framestyle=:box)
-	plot!(ds, KIi_base(db,H), label = "ice weight")
-	plot!(ds, KIw_base(db,H), label = "water weight")
-	plot!(ds, KIe_base(db,H,Rxx), label = "tensile stress")
-end
-
-# ╔═╡ 6dc28964-282b-4558-ae2e-9bdc0dadb4da
-
-
-# ╔═╡ 4a72aec9-4434-49b7-a8d8-a9dfbf52fbd0
-
-
-# ╔═╡ 03a731bf-6d0a-4803-aa0d-9ad41babc6be
-
-
-# ╔═╡ f04e4a27-50e0-4f9d-b251-81e53775960d
-
-
-# ╔═╡ 3fbc0095-630e-4314-a000-46013a00b60e
-
-
-# ╔═╡ bc77772e-6177-4fb1-b571-28929b90313a
-
-
-# ╔═╡ 3fe32bc1-5c96-4ded-85d4-357b305a6231
-
-
-# ╔═╡ 19dd2464-bad1-4c77-be44-32058289c1c6
-md"""
-Now consider the effect of depth-varying viscosity
-"""
-
-# ╔═╡ 0683928b-1a7f-451e-9cec-e60ec27e908d
-function B(z, Tb, Ts, H)
-	#get the viscosity factor as a function of Z
-	T = (Ts - Tb) * (z / H) + Tb;
-	return B(T)
-end
-
-# ╔═╡ 3fd5378c-e546-4f03-a97e-dbef4ed75451
-function B(T)
-	B0 = 1.928*10^(-5);
-	B0 = B0 * 1e5 #bar to pascal
-	T0 = 3155;
-	C = 0.16612;
-	k = 1.17;
-	Tr = 273.39;
-	return B0 *exp(T0/T - C/(Tr - T)^k)
-end 
-
-# ╔═╡ 7064114e-c580-422b-96f7-4065763b6f43
 function fb_dvv(ξ, Tb,Ts, H)
 	dz = 1e-2;
 	zz = dz:dz:(1-dz);
@@ -225,88 +67,100 @@ function fb_dvv(ξ, Tb,Ts, H)
 	return sum(integrand)*dz
 end
 
-# ╔═╡ 24e4f5fc-492c-44d8-a16f-3b9914c70299
 function get_rxx_(H,ϵxx, Tb, Ts)
 	return 2*B(H,Tb,Ts,H)* ϵxx.^(1/3)
 end
 
-# ╔═╡ b37b6a0d-9776-43e8-9377-e0560140dc24
-function KIB(db,H,ϵ, Tb, Ts) #ddv: depth-dependent viscosity
-	Tbk = Tb + 273.15;
-	Tsk = Ts + 273.15; #convert to kelvin
-	Rxx = get_rxx_(H, ϵ, Tbk, Tsk);
+function B(z, Tb, Ts, H)
+	#get the viscosity factor as a function of Z
+	T = (Ts - Tb) * (z / H) + Tb;
+	return B(T)
+end
+
+function B(T)
+	#overload the B function to also accept a single temperature
+	B0 = 1.928*10^(-5);
+	B0 = B0 * 1e5 #bar to pascal
+	T0 = 3155;
+	C = 0.16612;
+	k = 1.17;
+	Tr = 273.39;
+	return B0 *exp(T0/T - C/(Tr - T)^k)
+end 
+
+function KIw_base(db,H)
+	ρw = 1028.0;
+	g = 9.81;
+	gg_b = get_gb.(db/H)
+	return 2*ρw*g*db.^(3/2).*gg_b / sqrt(pi)
+end
+
+function KIw_base(db,H)
+	ρw = 1028.0;
+	g = 9.81;
+	gg_b = get_gb.(db/H)
+	return 2*ρw*g*db.^(3/2).*gg_b / sqrt(pi)
+end
+
+function KIi_base(db,H)
+	ρi = 918.0;
+	g  = 9.81;
+	fb  = get_fb.(db/H);
+	return -2*ρi*g*db.^(3/2).*fb/sqrt(pi)
+end
+
+function get_fb(ξ)
+	#ξ = db/H = \tilde{d_b}
+	dz = 1e-2; #numerical integration grid spacing
+	zz = dz:dz:(1-dz);
+	G = get_G(zz,ξ)
+	integrand = (ξ^(-1) .- zz) .* G .* (1 - ξ)^(-3/2) .* (1 .- zz.^2).^(-1/2)
+	return sum(integrand)*dz
+end
+
+function get_gb(ξ)
+	#ξ = db/H = \tilde{d_b}
+	ρi = 918.0;
+	ρw = 1028.0;
+	dz = 1e-2; #numerical integration grid spacing
+	zz = dz:dz:(1-dz);
+	G = get_G.(zz,ξ)
+	integrand = (ξ^(-1) * ρi / ρw .- zz) .* G .* (1 .- ξ)^(-3/2) .* (1 .- zz.^2).^(-1/2);
+	return sum(integrand)*dz
+end
 	
-	return  2 .* Rxx .* db.^(1/2) .* fb_dvv.(db/H, Tbk,Tsk,H) /sqrt(pi)
 end
 
-# ╔═╡ 722b0e45-2504-4b5e-a325-a58556f81c62
+# ╔═╡ 51afe073-84ca-45d6-8cd8-16b2bbc2cd49
 md"""
-First let's look at how the tensile stress changes depending on the temperatures, thickness, and strain rate
-"""
+$(@bind Tbb Slider(-10:1:0)) basal temperature (C): """
 
-# ╔═╡ 830b6dbd-e595-4cbd-b2d7-cabc3f9056de
-#md"""
-#$(@bind h Slider(20:2:300)) thickness: """
-
-# ╔═╡ db239db7-0572-4850-9349-8397372a57b8
-md"""
-$(@bind Tb Slider(-10:0.1:-0.1)) Tb (C): """
-
-# ╔═╡ cd1738da-d4e0-4925-9a29-31ae629ddcea
-Tb
-
-# ╔═╡ 2acee4a5-32ed-4b17-89c6-94ddd6f55c50
-md"""
-$(@bind Ts Slider(-30:1:-1)) Ts: """
-
-# ╔═╡ dc576813-c88f-442e-a9ae-dfc2976741e3
-Ts
-
-# ╔═╡ 654baa38-0c4f-4723-b146-110c45d39f81
-begin
-Tbk = Tb + 273.15;
-Tsk = Ts + 273.15;
-eps = 10 .^ (range(-3,stop=0,length=50));
-plot(eps,  get_rxx_(H,eps, Tbk, Tsk), label = :none, xlabel = "ϵ_xx", ylabel = "R_xx",framestyle = :box, xaxis = :log, grid = :on)
-end
-
-# ╔═╡ 03427f10-15be-489c-90e4-098668051856
-md"""
-of course, in Lai et al., thickness and basal temperature don't come into R_xx....
-"""
-
-# ╔═╡ 6e1f493a-e57d-411d-9fdb-04865b583ed7
-md"""
-$(@bind Tbb Slider(-10:1:0)) basal temperature: """
-
-# ╔═╡ c88a73ab-6e09-4fd4-a117-67cff901d204
+# ╔═╡ c6d0bf1d-da47-4f4e-a726-8e92168d24b2
 Tbb
 
-# ╔═╡ 62e06e61-dc03-402d-97cd-f31fafb44c9d
+# ╔═╡ 27125ba6-6596-48db-9c79-d162a5276798
 md"""
 $(@bind Tss Slider(-30:1:-10)) surface temperature (C): """
 
-# ╔═╡ bbe2daed-6ae1-4c5b-a039-0577be5cad5c
+# ╔═╡ 9861cea4-adf6-4e81-9d12-37a56c27d3ac
 Tss
 
-# ╔═╡ d1f25c4e-b7a2-4d7d-b79e-b5f8fe4a133b
+# ╔═╡ c5d4e2b2-17f6-4370-bc93-43683fc4d381
 md"""
-$(@bind h Slider(20:1:400)) thickness: """
+$(@bind h Slider(20:1:400)) thickness (m): """
 
-# ╔═╡ 46b9d0c4-3002-438e-a033-96a57be6c8d8
+# ╔═╡ eec2ee3b-7e5c-46e0-96c6-cde1e42c8a7f
 h
 
-# ╔═╡ 6d1dc442-d552-4b90-86f2-aa6f4e2b57f7
-h
-
-# ╔═╡ 304356b7-4a6e-4d22-9c34-7e02915e9ca2
+# ╔═╡ 6e3bb77c-2230-44ab-b654-f1ee457e5715
 md"""
 $(@bind strain_rate Slider(10 .^ (range(-3,stop=0,length=50)))) strain rate (yr^-1): """
 
-# ╔═╡ 19630e7f-5a3e-4942-89fc-a3342ad384ff
+# ╔═╡ eb3edb95-b77f-4d77-86cf-2bb5c8f9f8ab
 strain_rate
 
-# ╔═╡ 06b022ab-d50c-4c5d-a8cb-9e0add674285
+# ╔═╡ f0ff8493-3278-41a5-9642-5ceb2ac4fb2e
+#code for producing the plots
 begin
 	
 	dbb = LinRange(1,h-1,100);
@@ -349,13 +203,6 @@ begin
 end
 
 
-# ╔═╡ ba12b358-1662-45bf-898c-b769323bdb93
-
-
-# ╔═╡ cec4dac8-469a-4069-94cb-527424a3de85
-
-
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -365,8 +212,8 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 
 [compat]
 DifferentialEquations = "~7.5.0"
-Plots = "~1.35.2"
-PlutoUI = "~0.7.43"
+Plots = "~1.35.3"
+PlutoUI = "~0.7.44"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -432,9 +279,9 @@ version = "0.1.0"
 
 [[ArrayLayouts]]
 deps = ["FillArrays", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "ac5cc6021f32a272ee572dd2a325049a1fa0d034"
+git-tree-sha1 = "9a8017694c92ca097b23b3b43806be560af4c2ce"
 uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
-version = "0.8.11"
+version = "0.8.12"
 
 [[Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -555,9 +402,9 @@ version = "0.3.0"
 
 [[Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
-git-tree-sha1 = "5856d3031cdb1f3b2b6340dfdc66b6d9a149a374"
+git-tree-sha1 = "3ca828fe1b75fa84b021a7860bd039eaea84d2f2"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "4.2.0"
+version = "4.3.0"
 
 [[CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -602,9 +449,9 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
 [[DelayDiffEq]]
 deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "LinearAlgebra", "Logging", "NonlinearSolve", "OrdinaryDiffEq", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "UnPack"]
-git-tree-sha1 = "5acc7807b906d6a938dfeb965a6ea931260f054e"
+git-tree-sha1 = "044928c20c9f8f61b6d8de5d879987a271f86220"
 uuid = "bcd4f6db-9728-5f36-b5f7-82caef46ccdb"
-version = "5.38.0"
+version = "5.38.1"
 
 [[DelimitedFiles]]
 deps = ["Mmap"]
@@ -618,15 +465,15 @@ version = "0.4.0"
 
 [[DiffEqBase]]
 deps = ["ArrayInterfaceCore", "ChainRulesCore", "DataStructures", "Distributions", "DocStringExtensions", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "MuladdMacro", "NonlinearSolve", "Parameters", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SparseArrays", "Static", "StaticArrays", "Statistics", "Tricks", "ZygoteRules"]
-git-tree-sha1 = "0f9f82671406d21f6275cb6e9336259f062e81fa"
+git-tree-sha1 = "c272e6fb3c3558d807886d5247ed2a0b9c6f3823"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.105.0"
+version = "6.105.1"
 
 [[DiffEqCallbacks]]
 deps = ["DataStructures", "DiffEqBase", "ForwardDiff", "LinearAlgebra", "Markdown", "NLsolve", "Parameters", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "f8cc1ad62a87988225a07524ef84c7df7264c232"
+git-tree-sha1 = "16cecaff5228c6cb22cda8e81aa96442395cdfc5"
 uuid = "459566f4-90b8-5000-8ac3-15dfb0a30def"
-version = "2.24.1"
+version = "2.24.2"
 
 [[DiffEqNoiseProcess]]
 deps = ["DiffEqBase", "Distributions", "GPUArraysCore", "LinearAlgebra", "Markdown", "Optim", "PoissonRandom", "QuadGK", "Random", "Random123", "RandomNumbers", "RecipesBase", "RecursiveArrayTools", "ResettableStacks", "SciMLBase", "StaticArrays", "Statistics"]
@@ -664,9 +511,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "0d7d213133d948c56e8c2d9f4eab0293491d8e4a"
+git-tree-sha1 = "04db820ebcfc1e053bd8cbb8d8bccf0ff3ead3f7"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.75"
+version = "0.25.76"
 
 [[DocStringExtensions]]
 deps = ["LibGit2"]
@@ -796,9 +643,9 @@ version = "0.1.2"
 
 [[GR]]
 deps = ["Base64", "DelimitedFiles", "GR_jll", "HTTP", "JSON", "Libdl", "LinearAlgebra", "Pkg", "Preferences", "Printf", "Random", "Serialization", "Sockets", "Test", "UUIDs"]
-git-tree-sha1 = "a9ec6a35bc5ddc3aeb8938f800dc599e652d0029"
+git-tree-sha1 = "00a9d4abadc05b9476e937a5557fcce476b9e547"
 uuid = "28b8d3ca-fb5f-59d9-8090-bfdbd6d07a71"
-version = "0.69.3"
+version = "0.69.5"
 
 [[GR_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Cairo_jll", "FFMPEG_jll", "Fontconfig_jll", "GLFW_jll", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Libtiff_jll", "Pixman_jll", "Pkg", "Qt5Base_jll", "Zlib_jll", "libpng_jll"]
@@ -843,9 +690,9 @@ version = "1.0.2"
 
 [[HTTP]]
 deps = ["Base64", "CodecZlib", "Dates", "IniFile", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "4abede886fcba15cd5fd041fef776b230d004cee"
+git-tree-sha1 = "e8c58d5f03b9d9eb9ed7067a2f34c7c371ab130b"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.4.0"
+version = "1.4.1"
 
 [[HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
@@ -1113,15 +960,15 @@ version = "0.4.9"
 
 [[LoopVectorization]]
 deps = ["ArrayInterface", "ArrayInterfaceCore", "ArrayInterfaceOffsetArrays", "ArrayInterfaceStaticArrays", "CPUSummary", "ChainRulesCore", "CloseOpenIntervals", "DocStringExtensions", "ForwardDiff", "HostCPUFeatures", "IfElse", "LayoutPointers", "LinearAlgebra", "OffsetArrays", "PolyesterWeave", "SIMDDualNumbers", "SIMDTypes", "SLEEFPirates", "SnoopPrecompile", "SpecialFunctions", "Static", "ThreadingUtilities", "UnPack", "VectorizationBase"]
-git-tree-sha1 = "c38ab7b38df71346dc181f1a9d8dc455387f018b"
+git-tree-sha1 = "39af6a1e398a29f568dc9fe469f459ad3aacb03b"
 uuid = "bdcacae8-1622-11e9-2a5c-532679323890"
-version = "0.12.132"
+version = "0.12.133"
 
 [[MacroTools]]
 deps = ["Markdown", "Random"]
-git-tree-sha1 = "3d3e902b31198a27340d0bf00d6ac452866021cf"
+git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-version = "0.5.9"
+version = "0.5.10"
 
 [[ManualMemory]]
 git-tree-sha1 = "bcaef4fc7a0cfe2cba636d84cda54b5e4e4ca3cd"
@@ -1193,9 +1040,9 @@ version = "0.3.22"
 
 [[OffsetArrays]]
 deps = ["Adapt"]
-git-tree-sha1 = "1ea784113a6aa054c5ebd95945fa5e52c2f378e7"
+git-tree-sha1 = "f71d8950b724e9ff6110fc948dff5a329f901d64"
 uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.12.7"
+version = "1.12.8"
 
 [[Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1219,9 +1066,9 @@ version = "1.2.1"
 
 [[OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "e60321e3f2616584ff98f0a4f18d98ae6f89bbb3"
+git-tree-sha1 = "a94dc0169bffbf7e5250fb7e1efb1a85b09105c7"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.17+0"
+version = "1.1.18+0"
 
 [[OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -1248,9 +1095,9 @@ version = "1.4.1"
 
 [[OrdinaryDiffEq]]
 deps = ["Adapt", "ArrayInterface", "ArrayInterfaceGPUArrays", "ArrayInterfaceStaticArrays", "DataStructures", "DiffEqBase", "DocStringExtensions", "ExponentialUtilities", "FastBroadcast", "FastClosures", "FiniteDiff", "ForwardDiff", "FunctionWrappersWrappers", "LinearAlgebra", "LinearSolve", "Logging", "LoopVectorization", "MacroTools", "MuladdMacro", "NLsolve", "NonlinearSolve", "Polyester", "PreallocationTools", "Preferences", "RecursiveArrayTools", "Reexport", "SciMLBase", "SnoopPrecompile", "SparseArrays", "SparseDiffTools", "StaticArrays", "UnPack"]
-git-tree-sha1 = "06dbf3ab4f2530d5c5464f78c9aba4cc300ed069"
+git-tree-sha1 = "33a819c1355faeccc68d57a3c7d7c871680d49f2"
 uuid = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
-version = "6.28.0"
+version = "6.28.1"
 
 [[PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1270,9 +1117,9 @@ version = "0.12.3"
 
 [[Parsers]]
 deps = ["Dates"]
-git-tree-sha1 = "3d5bf43e3e8b412656404ed9466f1dcbf7c50269"
+git-tree-sha1 = "595c0b811cf2bab8b0849a70d9bd6379cc1cfb52"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.4.0"
+version = "2.4.1"
 
 [[Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -1291,9 +1138,9 @@ uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
 [[PlotThemes]]
 deps = ["PlotUtils", "Statistics"]
-git-tree-sha1 = "8162b2f8547bc23876edd0c5181b27702ae58dce"
+git-tree-sha1 = "1f03a2d339f42dca4a4da149c7e15e9b896ad899"
 uuid = "ccf2f8ad-2431-5c83-bf29-c5338b663b6a"
-version = "3.0.0"
+version = "3.1.0"
 
 [[PlotUtils]]
 deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "SnoopPrecompile", "Statistics"]
@@ -1303,15 +1150,15 @@ version = "1.3.1"
 
 [[Plots]]
 deps = ["Base64", "Contour", "Dates", "Downloads", "FFMPEG", "FixedPointNumbers", "GR", "JLFzf", "JSON", "LaTeXStrings", "Latexify", "LinearAlgebra", "Measures", "NaNMath", "Pkg", "PlotThemes", "PlotUtils", "Printf", "REPL", "Random", "RecipesBase", "RecipesPipeline", "Reexport", "RelocatableFolders", "Requires", "Scratch", "Showoff", "SnoopPrecompile", "SparseArrays", "Statistics", "StatsBase", "UUIDs", "UnicodeFun", "Unzip"]
-git-tree-sha1 = "65451f70d8d71bd9d06821c7a53adbed162454c9"
+git-tree-sha1 = "524d9ff1b2f4473fef59678c06f9f77160a204b1"
 uuid = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
-version = "1.35.2"
+version = "1.35.3"
 
 [[PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
-git-tree-sha1 = "2777a5c2c91b3145f5aa75b61bb4c2eb38797136"
+git-tree-sha1 = "6e33d318cf8843dade925e35162992145b4eb12f"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.43"
+version = "0.7.44"
 
 [[PoissonRandom]]
 deps = ["Random"]
@@ -1321,9 +1168,9 @@ version = "0.4.1"
 
 [[Polyester]]
 deps = ["ArrayInterface", "BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "ManualMemory", "PolyesterWeave", "Requires", "Static", "StrideArraysCore", "ThreadingUtilities"]
-git-tree-sha1 = "6ee5518f7baa05e154757a003bfb6936a174dbad"
+git-tree-sha1 = "cb2ede4b9cc432c1cba4d4452a62ae1d2a4141bb"
 uuid = "f517fe37-dbe3-4b94-8317-1923a5111588"
-version = "0.6.15"
+version = "0.6.16"
 
 [[PolyesterWeave]]
 deps = ["BitTwiddlingConvenienceFunctions", "CPUSummary", "IfElse", "Static", "ThreadingUtilities"]
@@ -1392,10 +1239,10 @@ uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 version = "1.3.0"
 
 [[RecipesPipeline]]
-deps = ["Dates", "NaNMath", "PlotUtils", "RecipesBase"]
-git-tree-sha1 = "017f217e647cf20b0081b9be938b78c3443356a0"
+deps = ["Dates", "NaNMath", "PlotUtils", "RecipesBase", "SnoopPrecompile"]
+git-tree-sha1 = "9b1c0c8e9188950e66fc28f40bfe0f8aac311fe0"
 uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
-version = "0.6.6"
+version = "0.6.7"
 
 [[RecursiveArrayTools]]
 deps = ["Adapt", "ArrayInterfaceCore", "ArrayInterfaceStaticArraysCore", "ChainRulesCore", "DocStringExtensions", "FillArrays", "GPUArraysCore", "IteratorInterfaceExtensions", "LinearAlgebra", "RecipesBase", "StaticArraysCore", "Statistics", "Tables", "ZygoteRules"]
@@ -1466,9 +1313,9 @@ version = "0.6.36"
 
 [[SciMLBase]]
 deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Preferences", "RecipesBase", "RecursiveArrayTools", "StaticArraysCore", "Statistics", "Tables"]
-git-tree-sha1 = "2c7b9be95f91c971ae4e4a6e3a0556b839874f2b"
+git-tree-sha1 = "5227af27f04ad30a68e2bb48300bf1b1a965d145"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.59.4"
+version = "1.61.2"
 
 [[Scratch]]
 deps = ["Dates"]
@@ -1526,9 +1373,9 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[SparseDiffTools]]
 deps = ["Adapt", "ArrayInterfaceCore", "ArrayInterfaceStaticArrays", "Compat", "DataStructures", "FiniteDiff", "ForwardDiff", "Graphs", "LinearAlgebra", "Requires", "SparseArrays", "StaticArrays", "VertexSafeGraphs"]
-git-tree-sha1 = "5fb8ba9180f467885e87a2c99cae178b67934be1"
+git-tree-sha1 = "a434a4a3a5757440cb3b6500eb9690ff5a516cf6"
 uuid = "47a9eef4-7e08-11e9-0b38-333d64bd3804"
-version = "1.26.2"
+version = "1.27.0"
 
 [[SpecialFunctions]]
 deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
@@ -1625,9 +1472,9 @@ version = "1.0.1"
 
 [[Tables]]
 deps = ["DataAPI", "DataValueInterfaces", "IteratorInterfaceExtensions", "LinearAlgebra", "OrderedCollections", "TableTraits", "Test"]
-git-tree-sha1 = "2d7164f7b8a066bcfa6224e67736ce0eb54aef5b"
+git-tree-sha1 = "c79322d36826aa2f4fd8ecfa96ddb47b174ac78d"
 uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
-version = "1.9.0"
+version = "1.10.0"
 
 [[Tar]]
 deps = ["ArgTools", "SHA"]
@@ -1948,58 +1795,18 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═ecb015b0-4487-11ed-24d6-231bc3be840b
-# ╠═d9bb6c76-bac3-4e36-93a5-f3877991c4d7
-# ╠═f3415bd6-218e-40b3-9d4a-da190e461105
-# ╠═86d23615-2fc4-4152-8431-99de10bbcc1d
-# ╠═85725ddd-df10-412b-b0ed-4a0a4eeff9f5
-# ╠═31883734-2f40-4e1a-a577-6df58c14167b
-# ╠═b3a12ef9-c437-4afc-a0d8-c26267fe305d
-# ╠═97b3c4ac-5166-4f15-81c1-1a30b8a718d4
-# ╠═6f435b76-48b9-49c3-aefe-b0418797844c
-# ╟─88e63a85-5bb0-4359-90b5-fb85254b6e9c
-# ╠═ba311191-6cc3-4748-84e9-a69d2ccb6a87
-# ╠═6531970c-022f-44fa-b79e-f94bf97f94cc
-# ╠═0f489a0f-1a0e-4d5f-99d1-6bb858321b21
-# ╠═fc513175-6e7b-48dd-8f2a-4ffd9d7c2455
-# ╠═ab569648-7023-4429-8f3a-0936580c07db
-# ╠═f2db7f4c-0c7c-4478-a86b-f4dfb4da9b29
-# ╠═e7c071b5-c370-4d58-aaf1-2110522700ab
-# ╠═8fbc91b9-906b-4d41-8d59-c598530cc776
-# ╟─b982f80d-4467-4b1c-bab8-06f0e82a0dc5
-# ╠═346bc233-6974-41e4-87e8-7c7abb98f6f6
-# ╠═6dc28964-282b-4558-ae2e-9bdc0dadb4da
-# ╠═4a72aec9-4434-49b7-a8d8-a9dfbf52fbd0
-# ╠═03a731bf-6d0a-4803-aa0d-9ad41babc6be
-# ╠═f04e4a27-50e0-4f9d-b251-81e53775960d
-# ╠═3fbc0095-630e-4314-a000-46013a00b60e
-# ╠═bc77772e-6177-4fb1-b571-28929b90313a
-# ╠═3fe32bc1-5c96-4ded-85d4-357b305a6231
-# ╟─19dd2464-bad1-4c77-be44-32058289c1c6
-# ╠═b37b6a0d-9776-43e8-9377-e0560140dc24
-# ╠═7064114e-c580-422b-96f7-4065763b6f43
-# ╠═24e4f5fc-492c-44d8-a16f-3b9914c70299
-# ╠═0683928b-1a7f-451e-9cec-e60ec27e908d
-# ╠═3fd5378c-e546-4f03-a97e-dbef4ed75451
-# ╟─722b0e45-2504-4b5e-a325-a58556f81c62
-# ╠═830b6dbd-e595-4cbd-b2d7-cabc3f9056de
-# ╟─46b9d0c4-3002-438e-a033-96a57be6c8d8
-# ╟─db239db7-0572-4850-9349-8397372a57b8
-# ╟─cd1738da-d4e0-4925-9a29-31ae629ddcea
-# ╟─2acee4a5-32ed-4b17-89c6-94ddd6f55c50
-# ╟─dc576813-c88f-442e-a9ae-dfc2976741e3
-# ╠═654baa38-0c4f-4723-b146-110c45d39f81
-# ╟─03427f10-15be-489c-90e4-098668051856
-# ╠═6e1f493a-e57d-411d-9fdb-04865b583ed7
-# ╟─c88a73ab-6e09-4fd4-a117-67cff901d204
-# ╠═62e06e61-dc03-402d-97cd-f31fafb44c9d
-# ╟─bbe2daed-6ae1-4c5b-a039-0577be5cad5c
-# ╠═d1f25c4e-b7a2-4d7d-b79e-b5f8fe4a133b
-# ╟─6d1dc442-d552-4b90-86f2-aa6f4e2b57f7
-# ╠═304356b7-4a6e-4d22-9c34-7e02915e9ca2
-# ╠═19630e7f-5a3e-4942-89fc-a3342ad384ff
-# ╠═06b022ab-d50c-4c5d-a8cb-9e0add674285
-# ╠═ba12b358-1662-45bf-898c-b769323bdb93
-# ╠═cec4dac8-469a-4069-94cb-527424a3de85
+# ╟─e4f354cc-6bc1-45a1-8cf0-ef43846a1f43
+# ╟─8c773d5e-4a2a-11ed-1b62-136ff8e0f3b5
+# ╟─11d51a15-144b-4977-b560-68c175e02278
+# ╟─3f407bb6-f314-4360-b276-15c16b4d1fb7
+# ╟─51afe073-84ca-45d6-8cd8-16b2bbc2cd49
+# ╟─c6d0bf1d-da47-4f4e-a726-8e92168d24b2
+# ╟─27125ba6-6596-48db-9c79-d162a5276798
+# ╟─9861cea4-adf6-4e81-9d12-37a56c27d3ac
+# ╟─c5d4e2b2-17f6-4370-bc93-43683fc4d381
+# ╟─eec2ee3b-7e5c-46e0-96c6-cde1e42c8a7f
+# ╟─6e3bb77c-2230-44ab-b654-f1ee457e5715
+# ╟─eb3edb95-b77f-4d77-86cf-2bb5c8f9f8ab
+# ╟─f0ff8493-3278-41a5-9642-5ceb2ac4fb2e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
